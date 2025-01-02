@@ -1,0 +1,37 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "traker"
+version = "0.3.2"
+description = "TRAK: Attributing Model Behavior at Scale"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [
+    { name = "MadryLab", email = "trak@mit.edu" }
+]
+
+dependencies = [
+    "numpy",
+    "tqdm",
+]
+
+[project.optional-dependencies]
+tests = [
+    "assertpy",
+    "torchvision",
+    "open_clip_torch",
+    "wget",
+    "scipy",
+    "datasets",
+    "transformers",
+]
+fast = [
+    "torch>=2.0.0",
+    "fast_jl",
+]
+
+[project.urls]
+Homepage = "https://trak.csail.mit.edu/"
