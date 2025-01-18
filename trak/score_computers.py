@@ -9,10 +9,16 @@ interface for score computers. Then, we provide two implementations:
     block-wise matrix multiplications to avoid OOM errors.
 
 """
-from abc import ABC, abstractmethod
+
 import logging
-from torch import Tensor
+from abc import ABC, abstractmethod
+
+import jax
+import jax.numpy as jnp
+import numpy as np
 import torch
+from torch import Tensor
+from tqdm import tqdm
 
 from .utils import get_matrix_mult
 
@@ -147,7 +153,9 @@ class BasicScoreComputer(AbstractScoreComputer):
         result = ch.zeros(
             self.proj_dim, self.proj_dim, dtype=self.dtype, device=self.device
         )
-        blocks = ch.split(grads, split_size_or_sections=self.CUDA_MAX_DIM_SIZE, dim=0)
+        blocks = ch.split(
+            grads, split_size_or_sections=self.CUDA_MAX_DIM_SIZE, dim=0
+        )
 
         for block in blocks:
             result += block.T.to(self.device) @ block.to(self.device)
@@ -155,8 +163,6 @@ class BasicScoreComputer(AbstractScoreComputer):
         return result
 
     def get_x_xtx_inv(self, grads: Tensor, xtx: Tensor) -> Tensor:
-        blocks = ch.split(grads, split_size_or_sections=self.CUDA_MAX_DIM_SIZE, dim=0)
-
         xtx_reg = xtx + self.lambda_reg * torch.eye(
             xtx.size(dim=0), device=xtx.device, dtype=xtx.dtype
         )
@@ -164,16 +170,42 @@ class BasicScoreComputer(AbstractScoreComputer):
 
         # center X^TX inverse a bit to avoid numerical issues when going to float16
         xtx_inv /= xtx_inv.abs().mean()
-
         xtx_inv = xtx_inv.to(self.dtype)
 
-        result = ch.empty(
-            grads.shape[0], xtx_inv.shape[1], dtype=self.dtype, device=self.device
-        )
-        for i, block in enumerate(blocks):
-            start = i * self.CUDA_MAX_DIM_SIZE
-            end = min(grads.shape[0], (i + 1) * self.CUDA_MAX_DIM_SIZE)
-            result[start:end] = block.to(self.device) @ xtx_inv
+        # Move everything to CPU first to avoid device conflicts
+        grads_cpu = grads.cpu().numpy()
+        xtx_inv_cpu = xtx_inv.cpu().numpy()
+
+        # Create JAX arrays on CPU
+        with jax.default_device(jax.devices("cpu")[0]):
+            grads_jax = jnp.array(grads_cpu)
+            xtx_inv_jax = jnp.array(xtx_inv_cpu)
+
+            n = grads_jax.shape[0]
+            factors = [i for i in range(1, n + 1) if n % i == 0]
+            smallest_factor_over_100 = next(
+                f for f in sorted(factors) if f > 100
+            )
+            grads_blocks = jnp.split(grads_jax, smallest_factor_over_100)
+
+        # Move xtx_inv to GPU once before the loop
+        xtx_inv_gpu = jax.device_put(xtx_inv_jax, jax.devices("gpu")[0])
+
+        # Process blocks on GPU
+        result_blocks = []
+        for block in tqdm(grads_blocks, desc="Processing blocks"):
+            # Move block to GPU, compute, then back to CPU
+            block_gpu = jax.device_put(block, jax.devices("gpu")[0])
+            result_gpu = block_gpu @ xtx_inv_gpu
+            result_blocks.append(jax.device_get(result_gpu))
+
+        # Concatenate results on CPU
+        with jax.default_device(jax.devices("cpu")[0]):
+            result_jax = jnp.concatenate(result_blocks)
+
+        # Convert back to PyTorch tensor
+        result = ch.from_numpy(np.array(result_jax)).to(dtype=self.dtype)
+
         return result
 
     def get_scores(
@@ -185,5 +217,7 @@ class BasicScoreComputer(AbstractScoreComputer):
         self.logger.debug(f"{train_dim=}, {target_dim=}")
 
         accumulator += (
-            get_matrix_mult(features=features, target_grads=target_grads).detach().cpu()
+            get_matrix_mult(features=features, target_grads=target_grads)
+            .detach()
+            .cpu()
         )

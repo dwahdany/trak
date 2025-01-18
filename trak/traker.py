@@ -14,27 +14,31 @@ This is done in two stages:
   of target samples, given the TRAK features computed in the previous step.
 
 """
-from .modelout_functions import AbstractModelOutput, TASK_TO_MODELOUT
-from .projectors import (
-    ProjectionType,
-    AbstractProjector,
-    CudaProjector,
-    BasicProjector,
-    ChunkedCudaProjector,
-)
-from .gradient_computers import FunctionalGradientComputer, AbstractGradientComputer
-from .score_computers import AbstractScoreComputer, BasicScoreComputer
-from .savers import AbstractSaver, MmapSaver, ModelIDException
-from .utils import get_num_params, get_parameter_chunk_sizes
-
-from typing import Iterable, Optional, Union
-from pathlib import Path
-from tqdm import tqdm
-from torch import Tensor
 
 import logging
+from pathlib import Path
+from typing import Iterable, Optional, Union
+
 import numpy as np
 import torch
+from torch import Tensor
+from tqdm import tqdm
+
+from .gradient_computers import (
+    AbstractGradientComputer,
+    FunctionalGradientComputer,
+)
+from .modelout_functions import TASK_TO_MODELOUT, AbstractModelOutput
+from .projectors import (
+    AbstractProjector,
+    BasicProjector,
+    ChunkedCudaProjector,
+    CudaProjector,
+    ProjectionType,
+)
+from .savers import AbstractSaver, MmapSaver, ModelIDException
+from .score_computers import AbstractScoreComputer, BasicScoreComputer
+from .utils import get_num_params, get_parameter_chunk_sizes
 
 ch = torch
 
@@ -264,7 +268,9 @@ class TRAKer:
                     using_cuda_projector = True
 
                 except (ImportError, RuntimeError, AttributeError) as e:
-                    self.logger.error(f"Could not use CudaProjector.\nReason: {str(e)}")
+                    self.logger.error(
+                        f"Could not use CudaProjector.\nReason: {str(e)}"
+                    )
                     self.logger.error("Defaulting to BasicProjector.")
                     projector = BasicProjector
                 proj_type = ProjectionType.rademacher
@@ -331,7 +337,9 @@ class TRAKer:
                 dtype=self.dtype,
                 device=self.device,
             )
-            self.logger.debug(f"Initialized projector with proj_dim {self.proj_dim}")
+            self.logger.debug(
+                f"Initialized projector with proj_dim {self.proj_dim}"
+            )
 
     def load_checkpoint(
         self,
@@ -396,15 +404,15 @@ class TRAKer:
                 Number of samples in the batch. Defaults to None.
 
         """
-        assert (
-            self.ckpt_loaded == self.saver.current_model_id
-        ), "Load a checkpoint using traker.load_checkpoint before featurizing"
-        assert (inds is None) or (
-            num_samples is None
-        ), "Exactly one of num_samples and inds should be specified"
-        assert (inds is not None) or (
-            num_samples is not None
-        ), "Exactly one of num_samples and inds should be specified"
+        assert self.ckpt_loaded == self.saver.current_model_id, (
+            "Load a checkpoint using traker.load_checkpoint before featurizing"
+        )
+        assert (inds is None) or (num_samples is None), (
+            "Exactly one of num_samples and inds should be specified"
+        )
+        assert (inds is not None) or (num_samples is not None), (
+            "Exactly one of num_samples and inds should be specified"
+        )
 
         if num_samples is not None:
             inds = np.arange(self._last_ind, self._last_ind + num_samples)
@@ -413,16 +421,18 @@ class TRAKer:
             num_samples = inds.reshape(-1).shape[0]
 
         # handle re-starting featurizing from a partially featurized model (some inds already featurized)
-        _already_done = (self.saver.current_store["is_featurized"][inds] == 1).reshape(
-            -1
-        )
+        _already_done = (
+            self.saver.current_store["is_featurized"][inds] == 1
+        ).reshape(-1)
         inds = inds[~_already_done]
         if len(inds) == 0:
             self.logger.debug("All samples in batch already featurized.")
             return 0
 
         grads = self.gradient_computer.compute_per_sample_grad(batch=batch)
-        grads = self.projector.project(grads, model_id=self.saver.current_model_id)
+        grads = self.projector.project(
+            grads, model_id=self.saver.current_model_id
+        )
         grads /= self.normalize_factor
         self.saver.current_store["grads"][inds] = (
             grads.to(self.dtype).cpu().clone().detach()
@@ -462,7 +472,9 @@ class TRAKer:
 
         self._last_ind = 0
 
-        for model_id in tqdm(model_ids, desc="Finalizing features for all model IDs.."):
+        for model_id in tqdm(
+            model_ids, desc="Finalizing features for all model IDs.."
+        ):
             if self.saver.model_ids.get(model_id) is None:
                 raise ModelIDException(
                     f"Model ID {model_id} not registered, not ready for finalizing."
@@ -479,15 +491,19 @@ class TRAKer:
 
             self.saver.load_current_store(model_id)
 
-            g = ch.as_tensor(self.saver.current_store["grads"], device=self.device)
+            g = ch.as_tensor(self.saver.current_store["grads"], device="cpu")
             xtx = self.score_computer.get_xtx(g)
 
             features = self.score_computer.get_x_xtx_inv(g, xtx)
-            self.saver.current_store["features"][:] = features.to(self.dtype).cpu()
+            self.saver.current_store["features"][:] = features.to(
+                self.dtype
+            ).cpu()
             if del_grads:
                 self.saver.del_grads(model_id)
 
-            self.saver.model_ids[self.saver.current_model_id]["is_finalized"] = 1
+            self.saver.model_ids[self.saver.current_model_id][
+                "is_finalized"
+            ] = 1
             self.saver.serialize_current_model_id_metadata()
 
     def start_scoring_checkpoint(
@@ -548,28 +564,35 @@ class TRAKer:
                 Number of samples in the batch. Defaults to None.
 
         """
-        assert (inds is None) or (
-            num_samples is None
-        ), "Exactly one of num_samples and inds should be specified"
-        assert (inds is not None) or (
-            num_samples is not None
-        ), "Exactly one of num_samples and inds should be specified"
+        assert (inds is None) or (num_samples is None), (
+            "Exactly one of num_samples and inds should be specified"
+        )
+        assert (inds is not None) or (num_samples is not None), (
+            "Exactly one of num_samples and inds should be specified"
+        )
 
-        if self.saver.model_ids[self.saver.current_model_id]["is_finalized"] == 0:
+        if (
+            self.saver.model_ids[self.saver.current_model_id]["is_finalized"]
+            == 0
+        ):
             self.logger.error(
                 f"Model ID {self.saver.current_model_id} not finalized, cannot score"
             )
             return None
 
         if num_samples is not None:
-            inds = np.arange(self._last_ind_target, self._last_ind_target + num_samples)
+            inds = np.arange(
+                self._last_ind_target, self._last_ind_target + num_samples
+            )
             self._last_ind_target += num_samples
         else:
             num_samples = inds.reshape(-1).shape[0]
 
         grads = self.gradient_computer.compute_per_sample_grad(batch=batch)
 
-        grads = self.projector.project(grads, model_id=self.saver.current_model_id)
+        grads = self.projector.project(
+            grads, model_id=self.saver.current_model_id
+        )
         grads /= self.normalize_factor
 
         exp_name = self.saver.current_experiment_name
@@ -614,7 +637,8 @@ class TRAKer:
             model_ids = self.saver.model_ids
         else:
             model_ids = {
-                model_id: self.saver.model_ids[model_id] for model_id in model_ids
+                model_id: self.saver.model_ids[model_id]
+                for model_id in model_ids
             }
         assert len(model_ids) > 0, "No model IDs to finalize scores for"
 
@@ -627,7 +651,9 @@ class TRAKer:
         num_targets = self.saver.experiments[exp_name]["num_targets"]
         _completed = [False] * len(model_ids)
 
-        self.saver.load_current_store(list(model_ids.keys())[0], exp_name, num_targets)
+        self.saver.load_current_store(
+            list(model_ids.keys())[0], exp_name, num_targets
+        )
         _scores_mmap = self.saver.current_store[f"{exp_name}_scores"]
         _scores_on_cpu = ch.zeros(*_scores_mmap.shape, device="cpu")
         if self.device != "cpu":
@@ -653,18 +679,28 @@ class TRAKer:
                 else:
                     raise e
 
-            if self.saver.model_ids[self.saver.current_model_id]["is_finalized"] == 0:
+            if (
+                self.saver.model_ids[self.saver.current_model_id][
+                    "is_finalized"
+                ]
+                == 0
+            ):
                 self.logger.warning(
                     f"Model ID {self.saver.current_model_id} not finalized, cannot score"
                 )
                 continue
 
-            g = ch.as_tensor(self.saver.current_store["features"], device=self.device)
+            g = ch.as_tensor(
+                self.saver.current_store["features"], device=self.device
+            )
             g_target = ch.as_tensor(
-                self.saver.current_store[f"{exp_name}_grads"], device=self.device
+                self.saver.current_store[f"{exp_name}_grads"],
+                device=self.device,
             )
 
-            self.score_computer.get_scores(g, g_target, accumulator=_scores_on_cpu)
+            self.score_computer.get_scores(
+                g, g_target, accumulator=_scores_on_cpu
+            )
             # .cpu().detach().numpy()
 
             _avg_out_to_losses += self.saver.current_store["out_to_loss"]
