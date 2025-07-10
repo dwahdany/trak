@@ -25,7 +25,7 @@ setup(
             "datasets",
             "transformers",
         ],
-        "fast": ["fast_jl"],
+        "fast": ["fast_jl_binary"],
     },
     include_package_data=True,
 )
