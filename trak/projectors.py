@@ -354,7 +354,7 @@ class CudaProjector(AbstractProjector):
             ValueError:
                 When attempting to use this on a non-CUDA device
             ModuleNotFoundError:
-                When fast_jl is not installed
+                When fast_jl_binary is not installed
 
         """
         super().__init__(grad_dim, proj_dim, seed, proj_type, device)
@@ -370,14 +370,14 @@ class CudaProjector(AbstractProjector):
         self.num_sms = ch.cuda.get_device_properties(device.index).multi_processor_count
 
         try:
-            import fast_jl
+            import fast_jl_binary as fast_jl
 
             # test run to catch at init time if projection goes through
             fast_jl.project_rademacher_8(
                 ch.zeros(8, 1_000, device="cuda"), 512, 0, self.num_sms
             )
         except ImportError:
-            err = "You should make sure to install the CUDA projector for traker (called fast_jl).\
+            err = "You should make sure to install the CUDA projector for traker (called fast_jl_binary).\
                   See the installation FAQs for more details."
             raise ModuleNotFoundError(err)
 
@@ -400,7 +400,7 @@ class CudaProjector(AbstractProjector):
         effective_batch_size = min(self.max_batch_size, effective_batch_size)
 
         function_name = f"project_{self.proj_type.value}_{effective_batch_size}"
-        import fast_jl
+        import fast_jl_binary as fast_jl
 
         fn = getattr(fast_jl, function_name)
 

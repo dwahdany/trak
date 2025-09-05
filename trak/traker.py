@@ -251,7 +251,7 @@ class TRAKer:
                 self.logger.info("Using Normal projection")
             else:
                 try:
-                    import fast_jl
+                    import fast_jl_binary as fast_jl
 
                     test_gradient = ch.ones(1, self.num_params_for_grad).cuda()
                     num_sms = ch.cuda.get_device_properties(

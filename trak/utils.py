@@ -31,7 +31,7 @@ def test_install(use_fast_jl: bool = True):
             )
             traker.load_checkpoint(model.state_dict(), model_id=0)
             traker.featurize(data, num_samples=20)
-            print("TRAK and fast_jl are installed correctly!")
+            print("TRAK and fast_jl_binary are installed correctly!")
     else:
         from trak.projectors import NoOpProjector
 
