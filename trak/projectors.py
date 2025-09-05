@@ -9,15 +9,15 @@ Here, we provide four implementations of the projector:
 - :class:`BasicProjector` (block-wise implementation)
 - :class:`CudaProjector` (a fast implementation with a custom CUDA kernel)
 """
-from abc import ABC, abstractmethod
-from typing import Union
-from enum import Enum
 import math
-from torch import Tensor
+from abc import ABC, abstractmethod
+from enum import Enum
+from typing import Union
+
 import torch
+from torch import Tensor
 
 from .utils import vectorize
-
 
 ch = torch
 
@@ -370,7 +370,7 @@ class CudaProjector(AbstractProjector):
         self.num_sms = ch.cuda.get_device_properties(device.index).multi_processor_count
 
         try:
-            import fast_jl
+            import fast_jl_binary as fast_jl
 
             # test run to catch at init time if projection goes through
             fast_jl.project_rademacher_8(
@@ -400,7 +400,7 @@ class CudaProjector(AbstractProjector):
         effective_batch_size = min(self.max_batch_size, effective_batch_size)
 
         function_name = f"project_{self.proj_type.value}_{effective_batch_size}"
-        import fast_jl
+        import fast_jl_binary as fast_jl
 
         fn = getattr(fast_jl, function_name)
 

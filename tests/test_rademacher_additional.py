@@ -1,10 +1,10 @@
-import pytest
 from itertools import product
 
+import pytest
 import torch as ch
 
 try:
-    import fast_jl
+    import fast_jl_binary as fast_jl
 except ModuleNotFoundError:
     print("No fast_jl available!")
 

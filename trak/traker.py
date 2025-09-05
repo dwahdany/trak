@@ -14,27 +14,28 @@ This is done in two stages:
   of target samples, given the TRAK features computed in the previous step.
 
 """
-from .modelout_functions import AbstractModelOutput, TASK_TO_MODELOUT
-from .projectors import (
-    ProjectionType,
-    AbstractProjector,
-    CudaProjector,
-    BasicProjector,
-    ChunkedCudaProjector,
-)
-from .gradient_computers import FunctionalGradientComputer, AbstractGradientComputer
-from .score_computers import AbstractScoreComputer, BasicScoreComputer
-from .savers import AbstractSaver, MmapSaver, ModelIDException
-from .utils import get_num_params, get_parameter_chunk_sizes
-
-from typing import Iterable, Optional, Union
-from pathlib import Path
-from tqdm import tqdm
-from torch import Tensor
 
 import logging
+from pathlib import Path
+from typing import Iterable, Optional, Union
+
 import numpy as np
 import torch
+from torch import Tensor
+from tqdm import tqdm
+
+from .gradient_computers import AbstractGradientComputer, FunctionalGradientComputer
+from .modelout_functions import TASK_TO_MODELOUT, AbstractModelOutput
+from .projectors import (
+    AbstractProjector,
+    BasicProjector,
+    ChunkedCudaProjector,
+    CudaProjector,
+    ProjectionType,
+)
+from .savers import AbstractSaver, MmapSaver, ModelIDException
+from .score_computers import AbstractScoreComputer, BasicScoreComputer
+from .utils import get_num_params, get_parameter_chunk_sizes
 
 ch = torch
 
@@ -251,7 +252,7 @@ class TRAKer:
                 self.logger.info("Using Normal projection")
             else:
                 try:
-                    import fast_jl
+                    import fast_jl_binary as fast_jl
 
                     test_gradient = ch.ones(1, self.num_params_for_grad).cuda()
                     num_sms = ch.cuda.get_device_properties(
@@ -396,15 +397,15 @@ class TRAKer:
                 Number of samples in the batch. Defaults to None.
 
         """
-        assert (
-            self.ckpt_loaded == self.saver.current_model_id
-        ), "Load a checkpoint using traker.load_checkpoint before featurizing"
-        assert (inds is None) or (
-            num_samples is None
-        ), "Exactly one of num_samples and inds should be specified"
-        assert (inds is not None) or (
-            num_samples is not None
-        ), "Exactly one of num_samples and inds should be specified"
+        assert self.ckpt_loaded == self.saver.current_model_id, (
+            "Load a checkpoint using traker.load_checkpoint before featurizing"
+        )
+        assert (inds is None) or (num_samples is None), (
+            "Exactly one of num_samples and inds should be specified"
+        )
+        assert (inds is not None) or (num_samples is not None), (
+            "Exactly one of num_samples and inds should be specified"
+        )
 
         if num_samples is not None:
             inds = np.arange(self._last_ind, self._last_ind + num_samples)
@@ -548,12 +549,12 @@ class TRAKer:
                 Number of samples in the batch. Defaults to None.
 
         """
-        assert (inds is None) or (
-            num_samples is None
-        ), "Exactly one of num_samples and inds should be specified"
-        assert (inds is not None) or (
-            num_samples is not None
-        ), "Exactly one of num_samples and inds should be specified"
+        assert (inds is None) or (num_samples is None), (
+            "Exactly one of num_samples and inds should be specified"
+        )
+        assert (inds is not None) or (num_samples is not None), (
+            "Exactly one of num_samples and inds should be specified"
+        )
 
         if self.saver.model_ids[self.saver.current_model_id]["is_finalized"] == 0:
             self.logger.error(
