@@ -4,6 +4,11 @@
 [![Code style:
 black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
 
+---
+> **⚠️ DEPRECATED**: This fork is no longer needed. Please use the [original repository](https://github.com/MadryLab/trak) instead.
+>
+> This fork was created as a temporary workaround for installing `trak` with `fast-jl`. Now you can install directly from the original repo using `uv` with the configuration shown below.
+---
 
 # TRAK: Attributing Model Behavior at Scale
 
@@ -89,6 +94,29 @@ If you use this code in your work, please cite using the following BibTeX entry:
 ```
 
 ## Installation
+
+### Recommended: Use the original repository with uv
+
+If you're using [uv](https://github.com/astral-sh/uv), you can install `traker[fast]` from the [original repository](https://github.com/MadryLab/trak) by adding the following to your `pyproject.toml`:
+
+```toml
+[project]
+name = "your-project-name"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.11,<3.14"
+dependencies = [
+    "traker[fast]",
+]
+
+[tool.uv.extra-build-dependencies]
+fast-jl = ["torch"]
+```
+
+The crucial part is the `[tool.uv.extra-build-dependencies]` section, which ensures that `torch` is available during the build of the `fast-jl` extension. This eliminates the need for this fork.
+
+### Alternative: pip installation
 
 To install the version of our package which contains a fast, custom `CUDA`
 kernel for the JL projection step, use
